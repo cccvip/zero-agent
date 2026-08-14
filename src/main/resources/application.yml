@@ -2,7 +2,7 @@ spring:
   ai:
     deepseek:
       base-url: https://api.deepseek.com
-      api-key:  111
+      api-key: 'sk-1e175253812a494886dd8952b56dc19c'
       chat:
         model: deepseek-chat  # 默认模型
         temperature: 0.7
