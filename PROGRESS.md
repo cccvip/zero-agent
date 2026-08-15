@@ -1,28 +1,21 @@
 # 学习进度交接（持续更新）
 
 > 用途：跨会话续接。新会话开场说"读 PROGRESS.md 继续"即可。
-> 最后更新：RAG 章节 - 切块器完成
+> 最后更新：第三周 - 混合检索完成，ReAct03.md 已写，本地 commit 待 push
 
 ## 当前状态
 
-**进行中**：第二周 RAG 章节。RAG 最小闭环已跑通：Ollama bge-m3 + Milvus 索引/召回驗證通過，整體滿意。
-**刚完成**：`RagDemo.index()` / `RagDemo.search()` 手寫完成並實測。
+**已完成**：第三周混合检索章节。RAG 最小闭环（`RagDemo`）与混合检索（`HybridRagDemo`，向量 + BM25 + RRF + 陷阱文档）均已手写并实测；`ReAct03.md` 笔记完成。
+**当前状态**：本地 commit 已做（`74d3eae`），push 因 GitHub HTTPS 认证需用户在本地终端/IDEA 完成。
 
-## 下一步（RAG 最小闭环）
+## 下一步
 
-```
-.md 文件 → MarkDownWordSplitter → List<Document> → EmbeddingModel(Ollama/bge-m3, 1024维)
-        → MilvusVectorStore.add() → similaritySearch() 验证召回
-```
-
-- [x] Ollama bge-m3 已就绪，1024 维已验证
-- [x] Milvus 已启动，可创建 collection
-- [x] pom 已包含 `spring-ai-starter-vector-store-milvus:2.0.0`、`spring-ai-starter-model-ollama:2.0.0`
-- [x] `application.yml` 已配置 Ollama/Milvus
-- [x] `RagDemo` 骨架已搭（`src/main/java/com/ai/demo/rag/RagDemo.java`）
-- [x] 手写 `RagDemo.index()` 和 `RagDemo.search()` 的核心两行（`vectorStore.add` / `similaritySearch`）
-- [x] 运行 `/rag/index` 后调用 `/rag/search?query=...` 验证召回质量
-- [ ] 之后再做混合检索（向量 + BM25 + RRF 融合）；可故意写"结论相反的陷阱文档"测试向量检索的盲区
+- [ ] 把混合检索接入 `/chat`，做真正的 RAG 问答（检索 → 拼接 prompt → 调 DeepSeek 生成答案）
+- [ ] 对比纯向量检索 vs 混合检索的 Top-K 差异，量化 BM25 收益
+- [ ] 中文分词升级（当前是单字切，可试 jieba / HanLP）
+- [ ] BM25 索引持久化，避免服务重启重建
+- [ ] 确认 README.md 是否已推送（上次 push 被取消过）
+- [ ] 完成 push（在本地终端/IDEA 执行 `git push`）
 
 ## 项目现状
 
@@ -39,15 +32,18 @@ src/main/java/com/ai/demo/
 ├── react/ReActAgent.java        # 手搓 ReAct 循环（ChatModel 层，~100行）
 ├── react/Context.java           # 空壳，未用
 ├── tool/TimeTool.java           # getCurrentTime / addTime / sum(故意1/0抛异常)
-└── splitter/MarkDownWordSplitter.java  # md 结构切分器（三层策略，含 main 测试入口）
+├── splitter/MarkDownWordSplitter.java  # md 结构切分器（三层策略，含 main 测试入口）
+└── rag/
+    ├── RagDemo.java             # RAG 最小闭环：向量索引 + 向量召回
+    └── HybridRagDemo.java       # 混合检索：向量 + BM25 + RRF + 陷阱文档
 ```
 
 ### 文档
 
 - `ReAct01.md`：第一周总结（核心认知 5 条 + 错误清单 10 条 + 验收记录 + SAA 兼容性结论）
 - `ReAct02.md`：第二周源码对照笔记（ToolCallingAdvisor / DefaultToolCallingManager / Advisor 链 / 可观测性实测）
+- `ReAct03.md`：第三周混合检索实战（BM25 + RRF + 陷阱文档 + 错误清单 + 面试弹药）
 - `README.md`：面试导向的学习档案（已写好；**最后一次 push 时被取消，可能未推送，下次先确认 `git status`**）
-- `src/main/java/com/ai/demo/rag/RagDemo.java`：RAG 最小闭环 Demo（已跑通）
 
 ## 关键环境备忘（重要！）
 
