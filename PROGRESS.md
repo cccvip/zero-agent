@@ -6,7 +6,7 @@
 ## 当前状态
 
 **已完成**：第三周混合检索章节。RAG 最小闭环（`RagDemo`）与混合检索（`HybridRagDemo`，向量 + BM25 + RRF + 陷阱文档）均已手写并实测；`ReAct03.md` 笔记完成。
-**当前状态**：本地 commit 已做（`74d3eae`），push 因 GitHub HTTPS 认证需用户在本地终端/IDEA 完成。
+**当前状态**：本地有两个 commit 待 push（`74d3eae`、`add68ea`），push 因 GitHub HTTPS 认证需用户在本地终端/IDEA 完成。
 
 ## 下一步
 
