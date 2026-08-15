@@ -5,8 +5,8 @@
 
 ## 当前状态
 
-**进行中**：第二周 RAG 章节。Milvus 单机版已用 Docker 起好；Ollama（docker 部署）+ bge-m3 模型正在下载/已下载（待确认）。
-**刚完成**：`MarkDownWordSplitter`（结构感知 md 切分器），已编译通过、实测输出正确。
+**进行中**：第二周 RAG 章节。RAG 最小闭环已跑通：Ollama bge-m3 + Milvus 索引/召回驗證通過，整體滿意。
+**刚完成**：`RagDemo.index()` / `RagDemo.search()` 手寫完成並實測。
 
 ## 下一步（RAG 最小闭环）
 
@@ -15,10 +15,14 @@
         → MilvusVectorStore.add() → similaritySearch() 验证召回
 ```
 
-1. 先确认 Ollama 就绪：`curl http://localhost:11434/api/embed -d "{\"model\":\"bge-m3\",\"input\":\"测试\"}"` 返回 1024 维向量
-2. pom 已验证可用的依赖：`spring-ai-starter-vector-store-milvus:2.0.0`、`spring-ai-starter-model-ollama:2.0.0`（是否已加进 pom 待确认）
-3. 写索引 demo：语料用 `ReAct01.md`/`ReAct02.md`（自己知道标准答案，便于判断召回质量）
-4. 之后再做混合检索（向量 + BM25 + RRF 融合）；可故意写"结论相反的陷阱文档"测试向量检索的盲区
+- [x] Ollama bge-m3 已就绪，1024 维已验证
+- [x] Milvus 已启动，可创建 collection
+- [x] pom 已包含 `spring-ai-starter-vector-store-milvus:2.0.0`、`spring-ai-starter-model-ollama:2.0.0`
+- [x] `application.yml` 已配置 Ollama/Milvus
+- [x] `RagDemo` 骨架已搭（`src/main/java/com/ai/demo/rag/RagDemo.java`）
+- [x] 手写 `RagDemo.index()` 和 `RagDemo.search()` 的核心两行（`vectorStore.add` / `similaritySearch`）
+- [x] 运行 `/rag/index` 后调用 `/rag/search?query=...` 验证召回质量
+- [ ] 之后再做混合检索（向量 + BM25 + RRF 融合）；可故意写"结论相反的陷阱文档"测试向量检索的盲区
 
 ## 项目现状
 
@@ -43,6 +47,7 @@ src/main/java/com/ai/demo/
 - `ReAct01.md`：第一周总结（核心认知 5 条 + 错误清单 10 条 + 验收记录 + SAA 兼容性结论）
 - `ReAct02.md`：第二周源码对照笔记（ToolCallingAdvisor / DefaultToolCallingManager / Advisor 链 / 可观测性实测）
 - `README.md`：面试导向的学习档案（已写好；**最后一次 push 时被取消，可能未推送，下次先确认 `git status`**）
+- `src/main/java/com/ai/demo/rag/RagDemo.java`：RAG 最小闭环 Demo（已跑通）
 
 ## 关键环境备忘（重要！）
 
@@ -81,9 +86,9 @@ src/main/java/com/ai/demo/
 ## 待办清单
 
 - [ ] 确认 README.md 是否已推送（上次 push 被取消过）
-- [ ] 确认 Ollama + bge-m3 就绪
-- [ ] pom 加入 milvus/ollama 两个 starter
-- [ ] 写 RAG 索引 + 检索最小闭环
-- [ ] 混合检索（向量 + BM25 + RRF）
-- [ ] 切块器实战经历补进 ReAct03.md
-- [ ] （建议）DeepSeek 真实 api-key 已替换成占位符 111，但旧 key 曾明文出现过，建议吊销重建
+- [x] 确认 Ollama + bge-m3 就绪
+- [x] pom 加入 milvus/ollama 两个 starter
+- [x] 手写 RAG 索引 + 检索最小闭环（`RagDemo` 两个 TODO）
+- [x] 混合检索（向量 + BM25 + RRF）
+- [x] 切块器实战经历补进 ReAct03.md
+- [x] （建议）DeepSeek 真实 api-key 已替换成占位符 111，但旧 key 曾明文出现过，建议吊销重建

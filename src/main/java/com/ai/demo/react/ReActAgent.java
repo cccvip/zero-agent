@@ -23,14 +23,14 @@ import java.util.List;
 @Component
 public class ReActAgent {
 
-    private ChatModel chatModel;
+    private ChatModel deepSeekChatModel;
 
     private TimeTool timeTool;
 
     private Integer maxStep=5;
 
-    public ReActAgent(ChatModel chatModel, TimeTool timeTool) {
-        this.chatModel = chatModel;
+    public ReActAgent(ChatModel deepSeekChatModel, TimeTool timeTool) {
+        this.deepSeekChatModel = deepSeekChatModel;
         this.timeTool = timeTool;
     }
 
@@ -59,7 +59,7 @@ public class ReActAgent {
             }
 
             Prompt prompt1 = new Prompt(messages,options);
-            ChatResponse chatResponse = chatModel.call(prompt1);
+            ChatResponse chatResponse = deepSeekChatModel.call(prompt1);
             Generation generation =  chatResponse.getResult();
             AssistantMessage assistantMessage = generation.getOutput();
             messages.add(assistantMessage);

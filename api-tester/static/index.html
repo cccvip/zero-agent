@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>API Tester</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      margin: 0;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+    header {
+      padding: 16px 24px;
+      border-bottom: 1px solid #334155;
+      background: #1e293b;
+      font-weight: 600;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      padding: 24px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    @media (max-width: 900px) {
+      .container { grid-template-columns: 1fr; }
+    }
+    .panel {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .panel h2 {
+      margin: 0 0 16px;
+      font-size: 16px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    select, input, textarea, button {
+      font: inherit;
+      border-radius: 6px;
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 10px 12px;
+      outline: none;
+    }
+    select { width: 110px; cursor: pointer; }
+    input { flex: 1; }
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      line-height: 1.5;
+    }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+      color: #94a3b8;
+    }
+    button {
+      background: #3b82f6;
+      border-color: #3b82f6;
+      color: #fff;
+      cursor: pointer;
+      font-weight: 600;
+      padding: 10px 24px;
+    }
+    button:hover { background: #2563eb; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .meta {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .badge {
+      font-size: 14px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 4px;
+      background: #334155;
+    }
+    .badge.ok { background: #166534; color: #bbf7d0; }
+    .badge.warn { background: #713f12; color: #fef08a; }
+    .badge.err { background: #7f1d1d; color: #fecaca; }
+    .tabs {
+      display: flex;
+      gap: 4px;
+      border-bottom: 1px solid #334155;
+      margin-bottom: 12px;
+    }
+    .tab {
+      padding: 8px 14px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      color: #94a3b8;
+      font-size: 13px;
+    }
+    .tab.active { color: #e2e8f0; border-color: #3b82f6; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    pre {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 14px;
+      margin: 0;
+      overflow: auto;
+      max-height: 420px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .headers-table { width: 100%; border-collapse: collapse; }
+    .headers-table td { padding: 8px; border-bottom: 1px solid #334155; font-size: 13px; }
+    .headers-table td:first-child { color: #94a3b8; width: 30%; vertical-align: top; }
+    .error { color: #fecaca; }
+    .hint { font-size: 12px; color: #64748b; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <header>
+    <span>🚀</span> API Tester
+  </header>
+
+  <div class="container">
+    <!-- Request Panel -->
+    <div class="panel">
+      <h2>Request</h2>
+
+      <div class="row">
+        <select id="method">
+          <option>GET</option>
+          <option>POST</option>
+          <option>PUT</option>
+          <option>PATCH</option>
+          <option>DELETE</option>
+          <option>HEAD</option>
+          <option>OPTIONS</option>
+        </select>
+        <input id="url" type="text" placeholder="https://api.example.com/users" value="" />
+        <button id="sendBtn" onclick="send()">Send</button>
+      </div>
+
+      <div>
+        <label>Headers</label>
+        <textarea id="headers" placeholder="Content-Type: application/json&#10;Authorization: Bearer token"></textarea>
+        <div class="hint">每行一个：Key: Value</div>
+      </div>
+
+      <div style="margin-top: 14px;">
+        <label>Body</label>
+        <textarea id="body" placeholder='{"name":"test"}'></textarea>
+      </div>
+    </div>
+
+    <!-- Response Panel -->
+    <div class="panel">
+      <h2>Response</h2>
+
+      <div id="empty" style="color: #64748b; padding: 40px 0; text-align: center;">
+        点击 Send 发送请求
+      </div>
+
+      <div id="result" style="display: none;">
+        <div class="meta">
+          <span id="statusBadge" class="badge">-</span>
+          <span>⏱ <span id="duration">0</span> ms</span>
+          <span>📦 <span id="size">0</span> B</span>
+        </div>
+
+        <div class="tabs">
+          <div class="tab active" onclick="switchTab('body')">Body</div>
+          <div class="tab" onclick="switchTab('headers')">Headers</div>
+        </div>
+
+        <div id="tab-body" class="tab-content active">
+          <pre id="respBody"></pre>
+        </div>
+        <div id="tab-headers" class="tab-content">
+          <table class="headers-table"><tbody id="respHeaders"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function send() {
+      const btn = document.getElementById('sendBtn');
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+
+      const headersText = document.getElementById('headers').value;
+      const headers = {};
+      headersText.split('\n').forEach(line => {
+        const idx = line.indexOf(':');
+        if (idx > 0) {
+          headers[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+        }
+      });
+
+      const payload = {
+        method: document.getElementById('method').value,
+        url: document.getElementById('url').value.trim(),
+        headers,
+        body: document.getElementById('body').value
+      };
+
+      try {
+        const res = await fetch('/api/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        showResponse(data);
+      } catch (err) {
+        showResponse({ error: err.message });
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Send';
+      }
+    }
+
+    function showResponse(data) {
+      document.getElementById('empty').style.display = 'none';
+      document.getElementById('result').style.display = 'block';
+
+      const badge = document.getElementById('statusBadge');
+      if (data.error) {
+        badge.className = 'badge err';
+        badge.textContent = 'Error';
+        document.getElementById('duration').textContent = data.duration_ms ?? '-';
+        document.getElementById('size').textContent = '0';
+        document.getElementById('respBody').innerHTML = `<span class="error">${escapeHtml(data.error)}</span>`;
+        document.getElementById('respHeaders').innerHTML = '';
+        return;
+      }
+
+      badge.className = 'badge ' + (data.status >= 200 && data.status < 300 ? 'ok' : data.status < 400 ? 'warn' : 'err');
+      badge.textContent = `${data.status} ${data.status_text}`;
+      document.getElementById('duration').textContent = data.duration_ms;
+
+      let body = data.body;
+      try {
+        body = JSON.stringify(JSON.parse(body), null, 2);
+      } catch (e) { /* keep raw */ }
+      document.getElementById('respBody').textContent = body;
+      document.getElementById('size').textContent = new Blob([data.body]).size;
+
+      const tbody = document.getElementById('respHeaders');
+      tbody.innerHTML = Object.entries(data.headers)
+        .map(([k, v]) => `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`)
+        .join('');
+    }
+
+    function switchTab(name) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById('tab-' + name).classList.add('active');
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+    }
+  </script>
+</body>
+</html>

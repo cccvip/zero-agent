@@ -2,10 +2,28 @@ spring:
   ai:
     deepseek:
       base-url: https://api.deepseek.com
-      api-key: 'sk-1e175253812a494886dd8952b56dc19c'
+      api-key: '111'
       chat:
         model: deepseek-chat  # 默认模型
         temperature: 0.7
+
+    ollama:
+      base-url: http://localhost:11434
+      embedding:
+        model: bge-m3
+
+    vectorstore:
+      milvus:
+        client:
+          host: localhost
+          port: 19530
+        database-name: default
+        collection-name: react_rag
+        embedding-dimension: 1024
+        index-type: IVF_FLAT
+        metric-type: COSINE
+        initialize-schema: true
+
 server:
   port: 8090
 management:
