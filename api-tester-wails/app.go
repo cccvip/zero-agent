@@ -82,7 +82,7 @@ func (a *App) SendRequest(req SendRequest) SendResponse {
 		outReq.Header.Set("User-Agent", "api-tester/1.0")
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: 5 * time.Minute}
 	start := time.Now()
 	resp, err := client.Do(outReq)
 	durationMs := time.Since(start).Milliseconds()
