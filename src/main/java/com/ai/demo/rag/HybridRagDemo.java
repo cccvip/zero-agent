@@ -2,6 +2,13 @@ package com.ai.demo.rag;
 
 import com.ai.demo.splitter.MarkDownWordSplitter;
 import com.alibaba.fastjson2.JSON;
+import org.apache.commons.collections4.CollectionUtils;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -31,6 +38,8 @@ public class HybridRagDemo {
 
     private final VectorStore vectorStore;
 
+    private final ChatModel deepSeekChatModel;
+
     // BM25 索引状态（仅内存，服务重启后需重新 /hybrid/index）
     private List<Document> corpus = new ArrayList<>();
     // TODO：补充你需要的索引结构，例如 docTermFreqs / docFreqs / docLengths / avgdl
@@ -49,9 +58,20 @@ public class HybridRagDemo {
     // 文檔總數
     private int n;
 
-    public HybridRagDemo(VectorStore vectorStore) {
+    public HybridRagDemo(VectorStore vectorStore, ChatModel deepSeekChatModel) {
         this.vectorStore = vectorStore;
+        this.deepSeekChatModel = deepSeekChatModel;
     }
+
+    private static final PromptTemplate RAG_TEMPLATE = new PromptTemplate("""
+        仅根据以下资料回答问题；资料里没有的，明确说不知道，不要编造。
+        回答末尾用 引用：[资料N] 标注你用到的资料编号。
+
+        资料：
+        {content}
+
+        问题：{query}
+        """);
 
     /**
      * POST /hybrid/index
@@ -75,6 +95,14 @@ public class HybridRagDemo {
      */
     @GetMapping("/hybrid/search")
     public List<String> search(@RequestParam String query) {
+        List<Document> fused = search(query,10);
+        return fused.stream()
+                .map(Document::getText)
+                .limit(5)
+                .toList();
+    }
+
+    private List<Document> search(String query,int topK){
         // 向量召回
         SearchRequest vectorRequest = SearchRequest.builder()
                 .query(query)
@@ -82,18 +110,62 @@ public class HybridRagDemo {
                 .build();
         List<Document> vectorResults = vectorStore.similaritySearch(vectorRequest);
 
+        if(CollectionUtils.isEmpty(corpus)){
+            return vectorResults;
+        }
+
         // 关键词召回
         // TODO：调用你写的 bm25Search(query, 10)
-        List<Document> bm25Results = bm25Search(query,10);
+        List<Document> bm25Results = bm25Search(query,topK);
 
         // RRF 融合
         // TODO：调用你写的 rrfFuse(vectorResults, bm25Results, 60)
         List<Document> fused = rrfFuse(vectorResults, bm25Results, 60);
+        return fused;
+    }
 
-        return fused.stream()
+    /**
+     * GET /hybrid/chat?query=...
+     * 真正的 RAG 问答：检索 → 拼接 prompt → 调 DeepSeek 生成答案。
+     *
+     * TODO Step 1：复用 /hybrid/search 的检索逻辑拿到 Top-K 文档。
+     *   （建议先把 search() 里"向量 + BM25 + RRF"那一段抽成 private List<Document> retrieve(String query)，
+     *     让 search() 和 chat() 共用，避免复制粘贴。）
+     * TODO Step 2：拼接 prompt。把检索到的文档内容拼进"资料"区，附上约束指令：
+     *   "仅根据以下资料回答问题；资料里没有的，明确说不知道，不要编造。"
+     * TODO Step 3：deepSeekChatModel.call(new Prompt(...)) 生成答案。
+     * TODO Step 4：返回 答案 + 引用来源（哪些块被用上了），方便核对模型有没有被陷阱文档带偏。
+     * 思考：如果 corpus 为空（没调过 /hybrid/index）会怎样？要不要兜底？
+     */
+    @GetMapping("/hybrid/chat")
+    public String chat(@RequestParam String query) {
+        if (corpus.isEmpty()) {
+            return "索引为空，请先 POST /hybrid/index";
+        }
+        // TODO
+        List<Document> searchDocument = search(query,10);
+        List<String> documents  = searchDocument.stream()
                 .map(Document::getText)
                 .limit(5)
                 .toList();
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < documents.size(); i++) {
+            sb.append("[资料").append(i + 1).append("]\n")
+                    .append(documents.get(i))                 // documents 保持 List<Document>，不用先 map 成 String
+                    .append("\n---\n");
+        }
+
+        Prompt prompt = RAG_TEMPLATE.create(Map.of("content", sb.toString(), "query", query));
+
+        ChatResponse chatResponse = deepSeekChatModel.call(prompt);
+        if(chatResponse == null) {
+            return "";
+        }
+
+        AssistantMessage assistantMessage =  chatResponse.getResult().getOutput();
+
+        return assistantMessage.getText();
     }
 
     /** 加載語料：兩份筆記 + 陷阱文檔 */
@@ -250,7 +322,7 @@ public class HybridRagDemo {
 
     public static void main(String[] args) {
         System.setOut(new PrintStream(System.out, true, Charset.defaultCharset()));
-        HybridRagDemo hybridRagDemo = new HybridRagDemo(null);
+        HybridRagDemo hybridRagDemo = new HybridRagDemo(null, null);
         System.out.println(JSON.toJSONString(hybridRagDemo.tokenize("手搓 ReAct 循环 maxStep 123")));
     }
 
