@@ -2,7 +2,6 @@ package com.ai.demo.rag;
 
 import com.ai.demo.splitter.MarkDownWordSplitter;
 import com.alibaba.fastjson2.JSON;
-import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -42,7 +41,7 @@ public class HybridRagDemo {
 
     // BM25 索引状态（仅内存，服务重启后需重新 /hybrid/index）
     private List<Document> corpus = new ArrayList<>();
-    // TODO：补充你需要的索引结构，例如 docTermFreqs / docFreqs / docLengths / avgdl
+
     // 每个文档的词频
     private List<Map<String,Integer>> docTermFreqs = new ArrayList<>();
 
@@ -66,6 +65,8 @@ public class HybridRagDemo {
     private static final PromptTemplate RAG_TEMPLATE = new PromptTemplate("""
         仅根据以下资料回答问题；资料里没有的，明确说不知道，不要编造。
         回答末尾用 引用：[资料N] 标注你用到的资料编号。
+        若资料间存在冲突，优先采信来源为 ReAct01.md 和 ReAct02.md 的内容；
+        来源为"陷阱文档"的资料仅供参考，不可作为最终结论依据。
 
         资料：
         {content}
@@ -95,14 +96,13 @@ public class HybridRagDemo {
      */
     @GetMapping("/hybrid/search")
     public List<String> search(@RequestParam String query) {
-        List<Document> fused = search(query,10);
-        return fused.stream()
+        return retrieve(query, 10).stream()
                 .map(Document::getText)
                 .limit(5)
                 .toList();
     }
 
-    private List<Document> search(String query,int topK){
+    private List<Document> retrieve(String query, int topK) {
         // 向量召回
         SearchRequest vectorRequest = SearchRequest.builder()
                 .query(query)
@@ -110,62 +110,56 @@ public class HybridRagDemo {
                 .build();
         List<Document> vectorResults = vectorStore.similaritySearch(vectorRequest);
 
-        if(CollectionUtils.isEmpty(corpus)){
-            return vectorResults;
-        }
-
-        // 关键词召回
-        // TODO：调用你写的 bm25Search(query, 10)
-        List<Document> bm25Results = bm25Search(query,topK);
-
-        // RRF 融合
-        // TODO：调用你写的 rrfFuse(vectorResults, bm25Results, 60)
-        List<Document> fused = rrfFuse(vectorResults, bm25Results, 60);
-        return fused;
+        // 关键词召回（BM25）+ RRF 融合
+        List<Document> bm25Results = bm25Search(query, topK);
+        return rrfFuse(vectorResults, bm25Results, 60, 1.0, 2.0);
     }
 
     /**
      * GET /hybrid/chat?query=...
-     * 真正的 RAG 问答：检索 → 拼接 prompt → 调 DeepSeek 生成答案。
-     *
-     * TODO Step 1：复用 /hybrid/search 的检索逻辑拿到 Top-K 文档。
-     *   （建议先把 search() 里"向量 + BM25 + RRF"那一段抽成 private List<Document> retrieve(String query)，
-     *     让 search() 和 chat() 共用，避免复制粘贴。）
-     * TODO Step 2：拼接 prompt。把检索到的文档内容拼进"资料"区，附上约束指令：
-     *   "仅根据以下资料回答问题；资料里没有的，明确说不知道，不要编造。"
-     * TODO Step 3：deepSeekChatModel.call(new Prompt(...)) 生成答案。
-     * TODO Step 4：返回 答案 + 引用来源（哪些块被用上了），方便核对模型有没有被陷阱文档带偏。
-     * 思考：如果 corpus 为空（没调过 /hybrid/index）会怎样？要不要兜底？
+     * 真正的 RAG 问答：检索 → 拼接 prompt → 调 DeepSeek 生成答案，并返回引用来源。
      */
     @GetMapping("/hybrid/chat")
     public String chat(@RequestParam String query) {
         if (corpus.isEmpty()) {
             return "索引为空，请先 POST /hybrid/index";
         }
-        // TODO
-        List<Document> searchDocument = search(query,10);
-        List<String> documents  = searchDocument.stream()
-                .map(Document::getText)
+
+        List<Document> docs = retrieve(query, 10).stream()
                 .limit(5)
                 .toList();
 
+        // per-query 空结果兜底：检索器什么都没召回时，不再调用模型，直接说明
+        if (docs.isEmpty()) {
+            return "资料中没有与问题相关的内容，无法回答。";
+        }
+
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < documents.size(); i++) {
-            sb.append("[资料").append(i + 1).append("]\n")
-                    .append(documents.get(i))                 // documents 保持 List<Document>，不用先 map 成 String
+        for (int i = 0; i < docs.size(); i++) {
+            Document doc = docs.get(i);
+            String source = doc.getMetadata().getOrDefault("source", "未知").toString();
+            sb.append("[资料").append(i + 1).append("]")
+                    .append("[来源：").append(source).append("]\n")
+                    .append(doc.getText())
                     .append("\n---\n");
         }
 
         Prompt prompt = RAG_TEMPLATE.create(Map.of("content", sb.toString(), "query", query));
 
         ChatResponse chatResponse = deepSeekChatModel.call(prompt);
-        if(chatResponse == null) {
+        if (chatResponse == null || chatResponse.getResult() == null) {
             return "";
         }
 
-        AssistantMessage assistantMessage =  chatResponse.getResult().getOutput();
+        AssistantMessage assistantMessage = chatResponse.getResult().getOutput();
+        String answer = assistantMessage.getText();
 
-        return assistantMessage.getText();
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("answer", answer);
+        result.put("sources", docs.stream()
+                .map(Document::getText)
+                .toList());
+        return JSON.toJSONString(result);
     }
 
     /** 加載語料：兩份筆記 + 陷阱文檔 */
@@ -184,13 +178,22 @@ public class HybridRagDemo {
                 """;
 
         List<Document> documents = new ArrayList<>();
-        documents.addAll(splitter.split(new Document(md1)));
-        documents.addAll(splitter.split(new Document(md2)));
-        documents.addAll(splitter.split(new Document(trap)));
+
+        List<Document> md1Docs = splitter.split(new Document(md1));
+        md1Docs.forEach(d -> d.getMetadata().put("source", "ReAct01.md"));
+        documents.addAll(md1Docs);
+
+        List<Document> md2Docs = splitter.split(new Document(md2));
+        md2Docs.forEach(d -> d.getMetadata().put("source", "ReAct02.md"));
+        documents.addAll(md2Docs);
+
+        List<Document> trapDocs = splitter.split(new Document(trap));
+        trapDocs.forEach(d -> d.getMetadata().put("source", "陷阱文档"));
+        documents.addAll(trapDocs);
+
         return documents;
     }
 
-    // TODO Step 1：分词。中文可以简单按字符切，英文按非单词字符切。
     private List<String> tokenize(String text) {
         String tokenText = text.toLowerCase(Locale.ROOT);
         List<String> list  = new ArrayList<>();
@@ -217,7 +220,6 @@ public class HybridRagDemo {
         return list;
     }
 
-    // TODO Step 2：根据 corpus 建立 BM25 索引（docTermFreqs / docFreqs / docLengths / avgdl）。
     private void buildBm25Index(List<Document> documents) {
         for(Document document:documents){
             String text = document.getText();
@@ -244,7 +246,6 @@ public class HybridRagDemo {
     private static final double K1 = 1.5;
     private static final double B = 0.75;
 
-    // TODO Step 2：对 query 做 BM25 打分，返回按分数降序排列的 Top-K 文档。
     private List<Document> bm25Search(String query, int topK) {
         // 1. 對 query 分詞
         List<String> queryTerms = tokenize(query);
@@ -287,8 +288,8 @@ public class HybridRagDemo {
                 .toList();
     }
 
-    // TODO Step 3：RRF 融合。按排名给分：score = Σ 1/(k + rank)，去重后降序。
-    private List<Document> rrfFuse(List<Document> vectorResults, List<Document> bm25Results, int k) {
+    private List<Document> rrfFuse(List<Document> vectorResults, List<Document> bm25Results, int k,
+                                   double vectorWeight, double bm25Weight) {
         Map<String, Double> rrfScores = new HashMap<>();
         // 記住每個內容對應的 Document
         Map<String, Document> docByText = new HashMap<>();
@@ -299,7 +300,7 @@ public class HybridRagDemo {
             String text = doc.getText();
             int rank = i + 1; // 第 1 名 rank = 1
 
-            rrfScores.merge(text, 1.0 / (k + rank), Double::sum);
+            rrfScores.merge(text, vectorWeight / (k + rank), Double::sum);
             docByText.put(text, doc);
         }
 
@@ -309,7 +310,7 @@ public class HybridRagDemo {
             String text = doc.getText();
             int rank = i + 1;
 
-            rrfScores.merge(text, 1.0 / (k + rank), Double::sum);
+            rrfScores.merge(text, bm25Weight / (k + rank), Double::sum);
             docByText.put(text, doc);
         }
 

@@ -1,17 +1,17 @@
 # 学习进度交接（持续更新）
 
 > 用途：跨会话续接。新会话开场说"读 PROGRESS.md 继续"即可。
-> 最后更新：第四周 - /hybrid/chat RAG 问答 + 官方两代 RAG 源码对照完成，ReAct04.md 已写并提交
+> 最后更新：2026-08-17 - /hybrid/chat 端到端自测完成，陷阱文档通过来源标签 + prompt 优先级压制，ReAct04.md 已补充实测记录
 
 ## 当前状态
 
 **已完成（第四周）**：
-1. `/hybrid/chat` RAG 问答闭环：混合检索 → `PromptTemplate` 拼接（`[资料N]` 编号 + `\n---\n` 分隔 + 引用标注指令）→ DeepSeek 生成；空索引早退兜底。编译通过，**端到端自测未做**（当时 Milvus/Ollama 不可用），验收口径见 ReAct04.md「验收记录」。
+1. `/hybrid/chat` RAG 问答闭环：混合检索 → `PromptTemplate` 拼接（`[资料N]` 编号 + `\n---\n` 分隔 + 引用标注指令）→ DeepSeek 生成；空索引早退兜底。编译通过，**端到端自测已完成**。陷阱文档压制方案落地：给资料打 `source` metadata + prompt 显式优先级，模型能明确区分错误资料。验收口径见 ReAct04.md「验收记录」。
 2. 官方源码对照：1.x `QuestionAnswerAdvisor`（`target/sai-1x/`）+ 2.0 `RetrievalAugmentationAdvisor` 七步管线（`target/sai-src/org/springframework/ai/rag/`）。结论全部进 `ReAct04.md`（含行号）。
 
 **commit 情况**：本地 6 个 commit 待 push：`74d3eae` `add68ea` `c345a90` `58f2fc3`（RAG 问答）`a52a221`（ReAct04+进度）`d7b68b2`（ReActAgent 清理）。push 需用户在本地终端/IDEA 完成（GitHub HTTPS 认证）。
-**未跟踪**：`src/main/java/com/ai/demo/rag/RagDemo2.java`——找 QuestionAnswerAdvisor 时的空草稿，未提交，可删。
-**遗留小项**：HybridRagDemo 里少量过期 TODO 注释（`:45` `:118` `:122` `:145` `:155` 矛盾注释）；`search(query,topK)` 里多余的 CollectionUtils guard（`:113-115`，bm25Search 空语料天然安全，应删）。
+**未跟踪**：`src/main/java/com/ai/demo/rag/RagDemo2.java`——已不存在（此前已删除）。
+**遗留小项**：已完成——清理 HybridRagDemo 过期 TODO、删除多余 CollectionUtils guard、补充 per-query 空结果兜底、`/hybrid/chat` 返回 `answer + sources` JSON。
 
 ## 本次会话历程（第四周）
 
@@ -20,15 +20,31 @@
 3. **读 1.x**：结论"简单粗暴"——全量 join 无长度防护、无编号、空结果不兜底；但把检索文档塞进 context/response metadata 做可观测。
 4. **读 2.0**：疑问点在 Step 1/2（QueryTransformer 改写 1→1 / QueryExpander 扩展 1→N）——都是用 LLM 解"词面鸿沟"，与 BM25 是同一问题的两种解法，默认全关（质量 vs 成本交换）。发现：官方默认 joiner 按 DocID 去重 + 原始 score 排序（跨源量纲不同，不如 RRF）；`DocumentPostProcessor` 是纯接口无内置实现（"超长上下文"的官方答案=留钩子自己实现）；空上下文时 `ContextualQueryAugmenter` 把 query 整个替换为"礼貌拒绝"指令（`:132`，常量经字段间接使用所以搜不到渲染点）。
 
+## 本次会话进展（续接）
+
+- 外部环境已恢复（`192.168.100.118:19530` / `:11434` 可连通）。
+- 完成 `HybridRagDemo` 清理：
+  - 删除过期 TODO 注释与多余 `CollectionUtils` guard；
+  - 将检索逻辑抽为 `retrieve(query, topK)`，`/hybrid/search` 与 `/hybrid/chat` 共用；
+  - 增加 per-query 空结果兜底；
+  - `/hybrid/chat` 改为返回 JSON，包含 `answer`（模型回答）和 `sources`（引用文档原文），便于核对模型是否被陷阱文档带偏。
+- API TEST 工具超时调整为 5 分钟，并重新编译打包 `api-tester.exe` 和 `api-tester-wails.exe`。
+- 完成 `/hybrid/chat` 端到端自测：模型答案站真实笔记，正确区分陷阱文档。
+- 陷阱文档压制实验记录进 `ReAct04.md`：
+  - 加权 RRF（BM25 weight 1.5 → 2.0）无法把陷阱文档拉下 Top1；
+  - 最终采用来源标签 + prompt 优先级，生成侧明确压制错误资料。
+- 编译通过（`mvn compile`，JDK 21.0.12）。
+
 ## 下一步
 
 - [ ] **（等环境）** 对比纯向量 vs 混合检索 Top-K 差异，量化 BM25 收益：做 `/hybrid/compare` 端点，query 集分三类（关键词精确型 / 语义模糊型 / 陷阱型），产出对比表进笔记
-- [ ] **（等环境）** `/hybrid/chat` 自测：`POST /hybrid/index` → `GET /hybrid/chat?query=手搓ReAct要不要自己实现maxStep兜底`，看答案站笔记还是陷阱、有无 `引用：[资料N]`；顺手清理遗留小项
-- [ ] 手搓版补 per-query 空结果兜底 + 响应带引用文档（对齐 2.0，见 ReAct04 待改进）
+- [x] **（环境已恢复）** `/hybrid/chat` 自测：`POST /hybrid/index` → `GET /hybrid/chat?query=手搓ReAct要不要自己实现maxStep兜底`，答案站笔记结论，正确区分陷阱文档，带 `引用：[资料N]`
+- [x] 手搓版补 per-query 空结果兜底 + 响应带引用文档（对齐 2.0，见 ReAct04 待改进）
+- [x] 陷阱文档压制：来源标签 + prompt 优先级
 - [ ] 中文分词升级（当前单字切，可试 jieba / HanLP；不依赖外部环境）
 - [ ] BM25 索引持久化，避免重启重建（不依赖外部环境）
 - [ ] 完成 push（本地终端/IDEA `git push`）；确认 README.md 是否已推送
-- [ ] 删除或处理 RagDemo2.java 草稿
+- [x] 删除或处理 RagDemo2.java 草稿（文件已不存在）
 
 ## 项目现状
 
