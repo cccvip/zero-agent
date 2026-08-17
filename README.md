@@ -45,6 +45,21 @@
 
 完整对照记录（含行号）：[ReAct02.md](ReAct02.md)
 
+## RAG 问答与对抗性案例
+
+核心在 [HybridRagDemo.java](src/main/java/com/ai/demo/rag/HybridRagDemo.java)：
+
+- 向量检索（Milvus + bge-m3）+ BM25 关键词检索 + RRF 融合
+- 检索结果按 `[资料N]` 编号、以 `\n---\n` 分隔拼进 Prompt
+- 指令要求模型仅根据资料回答，并在末尾标注 `引用：[资料N]`
+- per-query 空结果兜底，资料无关时不调模型
+
+**陷阱文档实验**：故意写入一段与笔记结论相反的干扰文档。
+`/hybrid/search` 会把陷阱文档排在 Top1，单纯提高 BM25 在 RRF 中的权重也无法把它拉下来；
+最终通过给资料打 `source` metadata + prompt 显式优先级，让模型在**生成侧**明确区分并忽略错误资料。
+
+完整记录与源码对照（含 Spring AI 1.x / 2.0 RAG 管线）：[ReAct04.md](ReAct04.md)
+
 ## 实测发现（可观测性）
 
 接入 actuator + Prometheus 后的真实指标：
@@ -80,5 +95,6 @@ Spring Boot 4.1 · Spring AI 2.0 · JDK 21 · DeepSeek · Micrometer + Prometheu
 
 - [x] 第一周：手搓 ReAct 循环 + 故意踩坑（工具异常/死循环/上下文膨胀）
 - [x] 第二周：读 Spring AI 2.0 源码对答案 + 可观测性接入
-- [ ] 第二周（进行中）：RAG —— Milvus + BGE + 混合检索
-- [ ] 第三周：完整演示项目 —— ReactAgent + 工具 + RAG + Redis 会话持久化
+- [x] 第三周：混合检索实战 —— BM25 + RRF + 陷阱文档（[ReAct03.md](ReAct03.md)）
+- [x] 第四周：RAG 问答闭环 + 官方两代 RAG 源码对照 + 陷阱文档压制（[ReAct04.md](ReAct04.md)）
+- [ ] 第五周：完整演示项目 —— ReactAgent + 工具 + RAG + Redis 会话持久化
