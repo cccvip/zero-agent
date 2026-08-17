@@ -1,18 +1,20 @@
 # 学习进度交接（持续更新）
 
 > 用途：跨会话续接。新会话开场说"读 PROGRESS.md 继续"即可。
-> 最后更新：第三周 - /hybrid/chat RAG 问答完成（待自测），进入检索对比实验
+> 最后更新：第四周 - RAG 问答 + 官方源码对照完成，ReAct04.md 已写
 
 ## 当前状态
 
-**已完成**：第三周混合检索章节 + RAG 问答闭环。`/hybrid/chat`（检索 → PromptTemplate 拼接 → DeepSeek 生成）已实现，含引用编号标注指令、`[资料N]` 标签、空索引兜底。编译通过，**端到端自测待做**（当时环境依赖有问题）。
-**遗留**：少量过期 TODO 注释清理（`:45`、`:118`、`:122`、`:145`、`:155` 矛盾注释）；`search(query,topK)` 里多余的 CollectionUtils 空语料 guard 待删。
-**当前状态**：本地有两个 commit 待 push（`74d3eae`、`add68ea`），push 因 GitHub HTTPS 认证需用户在本地终端/IDEA 完成。
+**已完成**：`/hybrid/chat` RAG 问答闭环（检索 → PromptTemplate 拼接 → DeepSeek 生成，带引用编号标注、空索引兜底）；Spring AI 两代 RAG 官方实现源码对照（1.x `QuestionAnswerAdvisor` / 2.0 `RetrievalAugmentationAdvisor` 管线），`ReAct04.md` 笔记完成。
+**未验收**：`/hybrid/chat` 端到端自测（当时 Milvus/Ollama 环境不可用），验收口径见 ReAct04.md「验收记录」。
+**遗留**：少量过期 TODO 注释清理；`search(query,topK)` 里多余的 CollectionUtils guard 待删；工作区还有 ReActAgent.java 未提交的小清理（未用 import）。
+**commit 情况**：`58f2fc3`（RAG 问答）已提交；此前 `74d3eae`、`add68ea`、`c345a90` 均在本地待 push，push 需用户在本地终端/IDEA 完成。
 
 ## 下一步
 
-- [ ] **进行中**：对比纯向量检索 vs 混合检索的 Top-K 差异，量化 BM25 收益
-- [ ] （待自测）`/hybrid/chat` 验收：`POST /hybrid/index` → `GET /hybrid/chat?query=手搓ReAct要不要自己实现maxStep兜底`，看答案站笔记结论还是陷阱结论、有无标注 `引用：[资料N]`
+- [ ] **进行中**（等环境）：对比纯向量检索 vs 混合检索的 Top-K 差异，量化 BM25 收益（做 `/hybrid/compare` 端点，query 集分关键词型/语义型/陷阱型三类）
+- [ ] （等环境）`/hybrid/chat` 自测，顺手清理过期 TODO 注释和 CollectionUtils guard
+- [ ] 手搓版补 per-query 空结果兜底 + 响应带引用文档（对齐 2.0，见 ReAct04 待改进）
 - [ ] 中文分词升级（当前是单字切，可试 jieba / HanLP）
 - [ ] BM25 索引持久化，避免服务重启重建
 - [ ] 确认 README.md 是否已推送（上次 push 被取消过）
