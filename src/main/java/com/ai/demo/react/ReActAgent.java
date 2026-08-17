@@ -1,7 +1,6 @@
 package com.ai.demo.react;
 
 import com.ai.demo.tool.TimeTool;
-import org.springframework.ai.chat.client.advisor.ToolCallAdvisor;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
@@ -11,7 +10,6 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.deepseek.DeepSeekChatOptions;
-import org.springframework.ai.model.tool.DefaultToolCallingManager;
 import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Component;
@@ -35,9 +33,6 @@ public class ReActAgent {
     }
 
     public String run(List<Message> messages,String userPrompt){
-
-
-
         String content = "";
         int step=0;
         UserMessage userMessage =  UserMessage.builder().text(userPrompt).build();
