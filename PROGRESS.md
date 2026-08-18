@@ -14,7 +14,7 @@
 2. 中文分词升级：`tokenize()` 换 jieba（SEARCH 模式，全局单例），签名不变调用方零改动，已实测。
 3. "BM25 索引持久化"需求**论证后移除**：源文件可重放 + 重建秒级 → 持久化是负收益；真正的场景答案是 ES/Lucene。判断过程进 ReAct05.md。
 
-**commit 情况**：本地 6 个 commit 待 push：`74d3eae` `add68ea` `c345a90` `58f2fc3`（RAG 问答）`a52a221`（ReAct04+进度）`d7b68b2`（ReActAgent 清理）。push 需用户在本地终端/IDEA 完成（GitHub HTTPS 认证）。
+**commit 情况**：已全部 push（2026-08-18，`main` 与 `origin/main` 同步）。
 **未跟踪**：`src/main/java/com/ai/demo/rag/RagDemo2.java`——已不存在（此前已删除）。
 **遗留小项**：已完成——清理 HybridRagDemo 过期 TODO、删除多余 CollectionUtils guard、补充 per-query 空结果兜底、`/hybrid/chat` 返回 `answer + sources` JSON。
 
@@ -54,7 +54,7 @@
 - [x] 陷阱文档压制：来源标签 + prompt 优先级
 - [x] 中文分词升级：jieba（SEARCH 模式）替换单字切，`tokenize()` 签名不变，已实测
 - [x] ~~BM25 索引持久化~~ **移除了**：源文件（md）本就在磁盘可重放，重建秒级，持久化计算产物是负收益；语料不可重放 + 大规模的场景应直接上 ES/Lucene（BM25 是其原生打分器），不自研
-- [ ] 完成 push（本地终端/IDEA `git push`）；确认 README.md 是否已推送
+- [x] 完成 push（2026-08-18 已推送，README.md 随之确认上去）
 - [x] 删除或处理 RagDemo2.java 草稿（文件已不存在）
 
 ## 项目现状
