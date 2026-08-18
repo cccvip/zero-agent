@@ -2,8 +2,10 @@ package com.ai.demo.rag;
 
 import com.ai.demo.splitter.MarkDownWordSplitter;
 import com.alibaba.fastjson2.JSON;
+import com.huaban.analysis.segmenter.JiebaSegmenter;
+import com.huaban.analysis.jieba.JiebaSegmenter;
+import com.huaban.analysis.jieba.SegToken;
 import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -162,6 +164,65 @@ public class HybridRagDemo {
         return JSON.toJSONString(result);
     }
 
+    /**
+     * GET /hybrid/compare?query=...
+     * 对比实验：同一 query 下，纯向量检索（A 组）vs 混合检索（B 组）的 Top-K 差异，
+     * 用于量化 BM25 的收益。
+     *
+     * 可比性前提：两组检索阶段 topK 一致（均为 5）。
+     * bm25OnlyNewDocs = B 组有而 A 组没有的块（以正文为 key 判同一块，同 rrfFuse 去重口径）。
+     */
+    @GetMapping("/hybrid/compare")
+    public Map<String, Object> compare(@RequestParam String query) {
+        if (corpus.isEmpty()) {
+            return Map.of("error", "索引为空，请先 POST /hybrid/index");
+        }
+
+        //A组 向量召回
+        SearchRequest vectorRequest = SearchRequest.builder()
+                .query(query)
+                .topK(5)
+                .build();
+        List<Document> aDocuments = vectorStore.similaritySearch(vectorRequest);
+        //B组 混合检索
+        List<Document> bDocuments = retrieve(query,5);
+
+        Set<String> aSet = new HashSet<>();
+        for(Document d:aDocuments){
+            aSet.add(d.getText());
+        }
+        // B 组中正文不在 A 组里的块 = BM25 的净贡献
+        List<Document> bm25NewDocs = new ArrayList<>();
+        for(Document d:bDocuments){
+            if(aSet.contains(d.getText())){
+                continue;
+            }
+            bm25NewDocs.add(d);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("query", query);
+        result.put("vectorOnly", toEntries(aDocuments));
+        result.put("hybrid", toEntries(bDocuments));
+        result.put("bm25OnlyNewDocs", toEntries(bm25NewDocs));
+        return result;
+    }
+
+    /** 把检索结果格式化为 {rank, source, preview} 条目列表，preview 取前 50 字 */
+    private List<Map<String, Object>> toEntries(List<Document> docs) {
+        List<Map<String, Object>> entries = new ArrayList<>();
+        for (int i = 0; i < docs.size(); i++) {
+            Document doc = docs.get(i);
+            String text = doc.getText();
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("rank", i + 1);
+            entry.put("source", doc.getMetadata().getOrDefault("source", "未知"));
+            entry.put("preview", text.length() > 50 ? text.substring(0, 50) : text);
+            entries.add(entry);
+        }
+        return entries;
+    }
+
     /** 加載語料：兩份筆記 + 陷阱文檔 */
     private List<Document> loadDocuments() throws IOException {
         MarkDownWordSplitter splitter = new MarkDownWordSplitter(2, 800);
@@ -194,30 +255,19 @@ public class HybridRagDemo {
         return documents;
     }
 
-    private List<String> tokenize(String text) {
-        String tokenText = text.toLowerCase(Locale.ROOT);
-        List<String> list  = new ArrayList<>();
-        char[] tokenByte =  tokenText.toCharArray();
+    // jieba 分词器：构造时加载词典，开销大，全局单例（Demo 阶段够用；官方未承诺线程安全，并发场景需另行处理）
+    private static final JiebaSegmenter SEGMENTER = new JiebaSegmenter();
 
-        StringBuilder stringBuilder = new StringBuilder();
-        for(char c:tokenByte){
-            if( (c >= 'a' && c<= 'z') || (c >='0' && c<='9')){
-                stringBuilder.append(c);
-            }else {
-                if (!stringBuilder.isEmpty()){
-                    String result = stringBuilder.toString().trim();
-                    list.add(result);
-                    stringBuilder.setLength(0);
-                }
-                if(Character.UnicodeBlock.of(c) == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS){
-                    list.add(c+"");
-                }
-            }
-        }
-        if (!stringBuilder.isEmpty()) {
-            list.add(stringBuilder.toString());
-        }
-        return list;
+    /**
+     * jieba 分词（SEARCH 模式）：中文按词切（"死循环"是一个 term），英文/数字保持完整词。
+     * 替代旧的"中文单字切 + 英文 a-z0-9 聚合"——单字切会让 DF 虚高、IDF 失真。
+     */
+    private List<String> tokenize(String text) {
+        return SEGMENTER.process(text.toLowerCase(Locale.ROOT), JiebaSegmenter.SegMode.SEARCH)
+                .stream()
+                .map(token -> token.word)
+                .filter(word -> !word.isBlank())
+                .toList();
     }
 
     private void buildBm25Index(List<Document> documents) {
@@ -325,6 +375,10 @@ public class HybridRagDemo {
         System.setOut(new PrintStream(System.out, true, Charset.defaultCharset()));
         HybridRagDemo hybridRagDemo = new HybridRagDemo(null, null);
         System.out.println(JSON.toJSONString(hybridRagDemo.tokenize("手搓 ReAct 循环 maxStep 123")));
+
+        JiebaSegmenter segmenter = new JiebaSegmenter();
+        List<SegToken> segTokens = segmenter.process("手搓 ReAct 循环 maxStep 123", JiebaSegmenter.SegMode.INDEX );
+        System.out.println(JSON.toJSONString(segTokens));
     }
 
 }
