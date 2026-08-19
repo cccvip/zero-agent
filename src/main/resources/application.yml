@@ -1,4 +1,9 @@
 spring:
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      # 未配密码，单机演示用；生产环境务必配置
   ai:
     deepseek:
       base-url: https://api.deepseek.com

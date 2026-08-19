@@ -2,7 +2,6 @@ package com.ai.demo.rag;
 
 import com.ai.demo.splitter.MarkDownWordSplitter;
 import com.alibaba.fastjson2.JSON;
-import com.huaban.analysis.segmenter.JiebaSegmenter;
 import com.huaban.analysis.jieba.JiebaSegmenter;
 import com.huaban.analysis.jieba.SegToken;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -104,7 +103,8 @@ public class HybridRagDemo {
                 .toList();
     }
 
-    private List<Document> retrieve(String query, int topK) {
+    /** 混合检索核心（向量+BM25+RRF），公开给 RetrieveTool 复用为 Agentic RAG 的检索工具 */
+    public List<Document> retrieve(String query, int topK) {
         // 向量召回
         SearchRequest vectorRequest = SearchRequest.builder()
                 .query(query)
@@ -119,12 +119,20 @@ public class HybridRagDemo {
 
     /**
      * GET /hybrid/chat?query=...
-     * 真正的 RAG 问答：检索 → 拼接 prompt → 调 DeepSeek 生成答案，并返回引用来源。
+     * 固定流水线 RAG 问答（Agentic RAG 的 A/B 对照组）。委托给 fixedChat，保持原响应结构不变。
      */
     @GetMapping("/hybrid/chat")
     public String chat(@RequestParam String query) {
+        return JSON.toJSONString(fixedChat(query));
+    }
+
+    /**
+     * 固定流水线 RAG 核心：检索 → 拼接 prompt → DeepSeek 生成答案 + 引用来源。
+     * 抽取为公开方法，供 EvalRunner 做 A/B 对照组（agentic vs fixed）。
+     */
+    public Map<String, Object> fixedChat(String query) {
         if (corpus.isEmpty()) {
-            return "索引为空，请先 POST /hybrid/index";
+            return Map.of("answer", "索引为空，请先 POST /hybrid/index", "sources", List.of());
         }
 
         List<Document> docs = retrieve(query, 10).stream()
@@ -133,7 +141,7 @@ public class HybridRagDemo {
 
         // per-query 空结果兜底：检索器什么都没召回时，不再调用模型，直接说明
         if (docs.isEmpty()) {
-            return "资料中没有与问题相关的内容，无法回答。";
+            return Map.of("answer", "资料中没有与问题相关的内容，无法回答。", "sources", List.of());
         }
 
         StringBuilder sb = new StringBuilder();
@@ -149,19 +157,17 @@ public class HybridRagDemo {
         Prompt prompt = RAG_TEMPLATE.create(Map.of("content", sb.toString(), "query", query));
 
         ChatResponse chatResponse = deepSeekChatModel.call(prompt);
-        if (chatResponse == null || chatResponse.getResult() == null) {
-            return "";
+        String answer = "";
+        if (chatResponse != null && chatResponse.getResult() != null) {
+            answer = chatResponse.getResult().getOutput().getText();
         }
-
-        AssistantMessage assistantMessage = chatResponse.getResult().getOutput();
-        String answer = assistantMessage.getText();
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("answer", answer);
         result.put("sources", docs.stream()
                 .map(Document::getText)
                 .toList());
-        return JSON.toJSONString(result);
+        return result;
     }
 
     /**

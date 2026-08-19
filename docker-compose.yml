@@ -1,0 +1,25 @@
+# Agentic RAG 一键启动：app + redis
+# 前置：Milvus + Ollama 已就绪（见设计文档 §8），通过环境变量指过去
+# 使用：docker compose up --build -d
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: agentic-rag-redis
+    ports:
+      - "6379:6379"
+
+  app:
+    build: .
+    container_name: agentic-rag-app
+    ports:
+      - "8090:8090"
+    environment:
+      SPRING_AI_DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?请在 .env 里配置 DEEPSEEK_API_KEY}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      # 外部依赖默认指向 192.168.100.118，可按需覆盖
+      SPRING_AI_VECTORSTORE_MILVUS_CLIENT_HOST: ${MILVUS_HOST:-192.168.100.118}
+      SPRING_AI_VECTORSTORE_MILVUS_CLIENT_PORT: 19530
+      SPRING_AI_OLLAMA_BASE_URL: ${OLLAMA_URL:-http://192.168.100.118:11434}
+    depends_on:
+      - redis
