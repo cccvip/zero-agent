@@ -1,7 +1,7 @@
 # 学习进度交接（持续更新）
 
 > 用途：跨会话续接。新会话开场说"读 PROGRESS.md 继续"即可。
-> 最后更新：2026-08-18 - 第五周：/hybrid/compare 端点（测试待补）+ jieba 分词落地 + 持久化需求移除，ReAct05.md 已写
+> 最后更新：2026-08-19 - 第五周：/hybrid/compare 三类 query 实测完成，对比表进 ReAct05.md；Agentic RAG 骨架已落地，核心 TODO 待补
 
 ## 当前状态
 
@@ -10,9 +10,10 @@
 2. 官方源码对照：1.x `QuestionAnswerAdvisor`（`target/sai-1x/`）+ 2.0 `RetrievalAugmentationAdvisor` 七步管线（`target/sai-src/org/springframework/ai/rag/`）。结论全部进 `ReAct04.md`（含行号）。
 
 **已完成（第五周）**：
-1. `/hybrid/compare` 对比端点：A 组纯向量 vs B 组混合（topK=5 一致），`bm25OnlyNewDocs` 标出 BM25 净贡献。**测试待补**（三类 query 口径见 ReAct05.md）。
+1. `/hybrid/compare` 对比端点：A 组纯向量 vs B 组混合，`bm25OnlyNewDocs` 标出 BM25 净贡献。**三类 query 实测完成**，对比表进 ReAct05.md「验收记录」。
 2. 中文分词升级：`tokenize()` 换 jieba（SEARCH 模式，全局单例），签名不变调用方零改动，已实测。
 3. "BM25 索引持久化"需求**论证后移除**：源文件可重放 + 重建秒级 → 持久化是负收益；真正的场景答案是 ES/Lucene。判断过程进 ReAct05.md。
+4. Agentic RAG 骨架落地：设计文档 + `agent/`、`tool/`、`memory/`、`eval/`、`controller/` 包，核心 TODO 待补（见代码注释）。
 
 **commit 情况**：已全部 push（2026-08-18，`main` 与 `origin/main` 同步）。
 **未跟踪**：`src/main/java/com/ai/demo/rag/RagDemo2.java`——已不存在（此前已删除）。
@@ -33,7 +34,7 @@
 
 ## 本次会话进展（续接，第四周末段）
 
-- 外部环境已恢复（`192.168.100.118:19530` / `:11434` 可连通）。
+- 外部环境已恢复（`127.0.0.1:19530` / `:11434` 可连通）。
 - 完成 `HybridRagDemo` 清理：
   - 删除过期 TODO 注释与多余 `CollectionUtils` guard；
   - 将检索逻辑抽为 `retrieve(query, topK)`，`/hybrid/search` 与 `/hybrid/chat` 共用；
@@ -48,7 +49,7 @@
 
 ## 下一步
 
-- [ ] **代码已完成，测试待补**：`/hybrid/compare` 端点（A 组纯向量 vs B 组混合，topK=5 一致；`bm25OnlyNewDocs` 正文判同块标出 BM25 净贡献）。测试口径：三类 query（关键词型 `maxStep` / 语义型"怎么防止工具调用死循环" / 陷阱型），产出对比表进笔记
+- [x] `/hybrid/compare` 端点三类 query 实测完成，对比表进 ReAct05.md（关键词型 `maxStep` / 语义型"怎么防止工具调用死循环" / 陷阱型）
 - [x] **（环境已恢复）** `/hybrid/chat` 自测：`POST /hybrid/index` → `GET /hybrid/chat?query=手搓ReAct要不要自己实现maxStep兜底`，答案站笔记结论，正确区分陷阱文档，带 `引用：[资料N]`
 - [x] 手搓版补 per-query 空结果兜底 + 响应带引用文档（对齐 2.0，见 ReAct04 待改进）
 - [x] 陷阱文档压制：来源标签 + prompt 优先级

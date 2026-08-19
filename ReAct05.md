@@ -60,7 +60,17 @@
 ## 验收记录
 
 - jieba 分词实测（`main()`）：`手搓 ReAct 循环 maxStep 123` → `["手","搓","react","循环","maxstep","123"]` ✓ 英文/数字完整、"循环"成词、"手搓" OOV 单字兜底（符合预期）
-- `/hybrid/compare` 端到端对比测试：**待补**（三类 query：关键词型 `maxStep` / 语义型"怎么防止工具调用死循环" / 陷阱型，产出对比表）
+- `/hybrid/compare` 端到端对比测试：已完成三类 query 实测（Milvus 集合 `react_rag`，jieba SEARCH 模式，BM25 weight=2.0 / vector weight=1.0 / RRF k=60）。结果如下：
+
+| query 类型 | vectorOnly Top1/特征 | hybrid Top1/特征 | bm25OnlyNewDocs 净贡献 | 关键观察 |
+|---|---|---|---|---|
+| 关键词型 `maxStep` | 第 1~3、5 名：陷阱文档/未知；仅第 4 名标为「陷阱文档」 | 第 1 名：陷阱文档；第 2~5 名：ReAct01/02 真实笔记 | 5 条：ReAct01 的「验收记录」「第二周计划」「最终成果」 + ReAct02 的「ToolCallingAdvisor 对答案」+ 1 条「未知」 | 关键词稀有，BM25 靠精确匹配把真实笔记从向量盲区里拉回来；但陷阱文档仍因字面强相关占 hybrid Top1 |
+| 语义型「怎么防止工具调用死循环」 | 第 1、2、4、5 名：未知；第 3 名：ReAct01 验收记录 | 全部 5 名均来自 ReAct01/02 真实笔记 | 4 条：ReAct01「最终成果」「第二周计划」+ ReAct02「ToolCallingAdvisor 对答案」「可观测性实战」 | 语义查询向量本就能命中，BM25 负责补全结构/章节标题等字面线索；无陷阱文档混入 |
+| 陷阱型「手搓 ReAct 要不要自己实现 maxStep 兜底」 | 第 1~3、5 名：未知；第 4 名：陷阱文档 | 第 1 名：陷阱文档；第 2~5 名：ReAct01/02 真实笔记 | 4 条：ReAct02「ToolCallingAdvisor 对答案」×2 + ReAct01「最终成果」+ ReAct02「对答案」 | 与 ReAct04 结论一致：融合/加权压不住语义相似的陷阱块，最终靠生成侧 prompt 的「来源优先级」兜底；BM25 至少让真实笔记进入候选 |
+
+- 测试口径说明：
+  1. 部分返回条目的 `source` 为「未知」，说明 Milvus 集合里仍残留旧索引（建 `source` metadata 之前的数据）；建议 `POST /hybrid/index` 重建集合后再复测，以便每条都有明确来源。
+  2. `vectorOnly` 严格取 `topK=5`，但 `hybrid` 走 `retrieve(query,5)` 时向量路内部写死 `topK=10`、RRF 输出未再截断，导致本次 hybrid 返回 6 条。严格对比应让两组检索阶段 topK 一致并截断到 5，否则口径不等价。
 - 编译通过（JDK 21）
 
 ## 面试弹药
@@ -72,7 +82,7 @@
 
 ## 待改进
 
-- [ ] `/hybrid/compare` 三类 query 实测，对比表补进本文「验收记录」
+- [x] `/hybrid/compare` 三类 query 实测，对比表已补进本文「验收记录」
 - [ ] （可选）jieba 用户词典：把"手搓"等项目术语加进去
 - [ ] （可选）jieba 线程安全性查证，结论补进本文
-- [ ] 新章节候选：Agentic RAG——把检索变成 ReAct 的工具，模型自己决定何时检索（打通第一周 ReAct 与本周 RAG）
+- [x] 新章节候选：Agentic RAG——骨架已实现，见 `docs/superpowers/specs/2026-08-18-agentic-rag-design.md` + `agent/`、`tool/`、`memory/`、`eval/` 包，核心 TODO 待补

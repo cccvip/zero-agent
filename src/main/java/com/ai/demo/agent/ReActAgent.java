@@ -37,11 +37,11 @@ import java.util.List;
 @Component
 public class ReActAgent {
 
-    private final ChatModel chatModel;
+    private final ChatModel deepSeekChatModel;
     private final ToolRegistry toolRegistry;
 
-    public ReActAgent(ChatModel chatModel, ToolRegistry toolRegistry) {
-        this.chatModel = chatModel;
+    public ReActAgent(ChatModel deepSeekChatModel, ToolRegistry toolRegistry) {
+        this.deepSeekChatModel = deepSeekChatModel;
         this.toolRegistry = toolRegistry;
     }
 
