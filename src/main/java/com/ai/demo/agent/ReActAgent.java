@@ -1,10 +1,10 @@
 package com.ai.demo.agent;
 
 import com.ai.demo.dto.AgentResult;
-import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.ToolResponseMessage;
-import org.springframework.ai.chat.messages.UserMessage;
+import com.ai.demo.dto.StepTrace;
+import org.springframework.ai.chat.messages.*;
+import org.springframework.ai.chat.metadata.ChatResponseMetadata;
+import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -44,7 +44,7 @@ public class ReActAgent {
         this.deepSeekChatModel = deepSeekChatModel;
         this.toolRegistry = toolRegistry;
     }
-
+    private int maxStep = 5;
     /**
      * 跑一轮 Agentic 对话。
      *
@@ -52,22 +52,99 @@ public class ReActAgent {
      * @param userPrompt 用户本次输入
      */
     public AgentResult run(List<Message> messages, String userPrompt) {
-        // TODO 由你实现
-        // 参照 react/ReActAgent.run() 的结构改造：
-        // 1. messages.add(UserMessage)
-        // 2. List<ToolCallback> = toolRegistry.all()，放进 DeepSeekChatOptions
-        // 3. while(true)：
-        //    step++；step > maxStep → 返回终止文案
-        //    记 model_call trace（本步耗时 System.currentTimeMillis 差）
-        //    chatModel.call(new Prompt(messages, options)) → assistantMessage 入列
-        //    assistantMessage.hasToolCalls() ?
-        //       对每个 toolCall：toolRegistry.lookup(name)
-        //           null → 回喂"工具不存在"（幻觉名兜底）
-        //           else → try call(arguments) catch(Exception) 回喂错误文案
-        //           记 tool_call trace（工具名/参数/结果/耗时）
-        //       ToolResponseMessage 入列，continue
-        //       : assistantMessage.getText() → break
-        // 4. 每轮 ChatResponse.getMetadata().getUsage() 拿 promptTokens/completionTokens 累加
-        return null;
+        if(messages.isEmpty()){
+            messages.add(new SystemMessage(
+                    "你是 ReAct 助手。仅当用户问题涉及学习笔记或知识库内容时才调用 retrieve 工具；否则直接回答。"
+            ));
+        }
+        String answer;
+        List<StepTrace> trace = new ArrayList<>();
+        long promptTokens =0 ;
+        long completionTokens = 0;
+
+        int step=0;
+
+        UserMessage userMessage =  UserMessage.builder().text(userPrompt).build();
+        messages.add(userMessage);
+
+        List<ToolCallback> toolCallbacks = toolRegistry.all();
+
+        DeepSeekChatOptions options = DeepSeekChatOptions.builder()
+                .toolCallbacks(toolCallbacks)
+                .build();
+
+        while (true){
+            step++;
+
+            if(step>maxStep){
+                answer = "已达到最大步数 " + maxStep + "，任务未完成";
+                break;
+            }
+
+            long start = System.currentTimeMillis();
+
+            Prompt prompt1 = new Prompt(messages,options);
+            ChatResponse chatResponse = deepSeekChatModel.call(prompt1);
+
+            long end = System.currentTimeMillis();
+
+            StepTrace modelStep = new StepTrace("model_call","","","",end-start);
+            trace.add(modelStep);
+
+            ChatResponseMetadata chatResponseMetadata = chatResponse.getMetadata();
+            Usage usage = chatResponseMetadata.getUsage();
+
+            if(usage!=null){
+                completionTokens+=usage.getCompletionTokens();
+                promptTokens+=usage.getPromptTokens();
+            }
+
+            Generation generation =  chatResponse.getResult();
+            AssistantMessage assistantMessage = generation.getOutput();
+            messages.add(assistantMessage);
+
+            if(assistantMessage.hasToolCalls()){
+                List<ToolResponseMessage.ToolResponse> list = new ArrayList<>();
+                List<AssistantMessage.ToolCall> toolCalls = assistantMessage.getToolCalls();
+                for(AssistantMessage.ToolCall toolCall:toolCalls){
+                    ToolCallback cBack = toolRegistry.lookup(toolCall.name());
+                    //处理Tool不存在的情况
+                    if(cBack ==null){
+                        list.add(new ToolResponseMessage.ToolResponse(toolCall.id(), toolCall.name(), "工具不存在"));
+                        trace.add(new StepTrace("tool_call", toolCall.name(), toolCall.arguments(), "工具不存在", 0L));
+                        continue;
+                    }
+                    //Tool执行报错
+                    long toolStart = System.currentTimeMillis();
+                    try{
+
+                        String result = cBack.call(toolCall.arguments());
+                        ToolResponseMessage.ToolResponse toolResponse = new ToolResponseMessage.ToolResponse(
+                                toolCall.id(),
+                                toolCall.name(),
+                                result
+                        );
+                        long toolEnd = System.currentTimeMillis();
+
+                        StepTrace toolStep = new StepTrace("tool_call",toolCall.name(),toolCall.arguments(),result,toolEnd-toolStart);
+                        trace.add(toolStep);
+                        list.add(toolResponse);
+                    }catch (Exception e){
+                        long toolEnd = System.currentTimeMillis();
+                        System.out.println("执行工具: " + toolCall.name() + " 参数: " + toolCall.arguments());
+                        list.add(new ToolResponseMessage.ToolResponse(
+                                toolCall.id(), toolCall.name(), "工具执行失败: " + e.getMessage()));
+                        System.out.println("回喂错误: " + e.getMessage());
+                        trace.add(new StepTrace("tool_call", toolCall.name(), toolCall.arguments(), "工具执行失败: " + e.getMessage(), toolEnd - toolStart));
+                    }
+                }
+                ToolResponseMessage toolResponseMessage = ToolResponseMessage.builder().responses(list).build();
+                messages.add(toolResponseMessage);
+            }else {
+                answer=assistantMessage.getText();
+                break;
+            }
+        }
+        return new AgentResult(answer,trace,promptTokens,completionTokens);
     }
 }

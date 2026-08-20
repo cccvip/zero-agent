@@ -103,6 +103,10 @@ public class HybridRagDemo {
                 .toList();
     }
 
+    public boolean isIndexed() {
+        return !corpus.isEmpty();
+    }
+
     /** 混合检索核心（向量+BM25+RRF），公开给 RetrieveTool 复用为 Agentic RAG 的检索工具 */
     public List<Document> retrieve(String query, int topK) {
         // 向量召回

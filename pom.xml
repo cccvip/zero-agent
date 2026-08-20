@@ -29,6 +29,12 @@
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
 
+        <!-- JSON：Redis 会话序列化需要 Jackson -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-json</artifactId>
+        </dependency>
+
         <!-- 模型 starter：OpenAI 兼容协议（Kimi/DeepSeek/智谱都走它） -->
 <!--        <dependency>-->
 <!--            <groupId>org.springframework.ai</groupId>-->
