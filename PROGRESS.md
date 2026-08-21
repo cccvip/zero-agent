@@ -1,7 +1,7 @@
 # 学习进度交接（持续更新）
 
 > 用途：跨会话续接。新会话开场说"c"即可。
-> 最后更新：2026-08-19 - 第五周：/hybrid/compare 三类 query 实测完成，对比表进 ReAct05.md；Agentic RAG 骨架已落地，核心 TODO 待补
+> 最后更新：2026-08-21 - 修复 mvn compile 报错（Jackson→fastjson2、AssistantMessage 改 builder）；日志体系落地（Lombok @Slf4j + logback-spring.xml）；README 去 AI 味改写。本地提交 8dc419a 未 push
 
 ## 当前状态
 
@@ -14,8 +14,9 @@
 2. 中文分词升级：`tokenize()` 换 jieba（SEARCH 模式，全局单例），签名不变调用方零改动，已实测。
 3. "BM25 索引持久化"需求**论证后移除**：源文件可重放 + 重建秒级 → 持久化是负收益；真正的场景答案是 ES/Lucene。判断过程进 ReAct05.md。
 4. Agentic RAG 骨架落地：设计文档 + `agent/`、`tool/`、`memory/`、`eval/`、`controller/` 包，核心 TODO 待补（见代码注释）。
+5. 编译与日志收尾（2026-08-21）：`SessionService` 序列化 Jackson→fastjson2（Boot 4 类路径是 Jackson 3 `tools.jackson`，Jackson 2 包不存在）；`AssistantMessage` 改 builder 构造（2.0 无 `(String, List)` 公开构造器）；6 个类换 Lombok `@Slf4j`，新增 `logback-spring.xml`（控制台 UTF-8）。README 去 AI 味改写。
 
-**commit 情况**：已全部 push（2026-08-18，`main` 与 `origin/main` 同步）。
+**commit 情况**：2026-08-21 本地提交 `8dc419a`（编译修复 + 日志体系），**未 push**；此前 2026-08-18 已全部 push。
 **未跟踪**：`src/main/java/com/ai/demo/rag/RagDemo2.java`——已不存在（此前已删除）。
 **遗留小项**：已完成——清理 HybridRagDemo 过期 TODO、删除多余 CollectionUtils guard、补充 per-query 空结果兜底、`/hybrid/chat` 返回 `answer + sources` JSON。
 
@@ -31,6 +32,13 @@
 1. **/hybrid/compare**：用户写 A/B 检索 + 判同块（正文做 key，答对）；review 抓掉一段死代码（for 循环复制列表 + `i>10` off-by-one + 复制结果没人用）；组装与兜底由用户要求代写完成。
 2. **jieba 升级**：三个设计决定（单例 / 英文完整词 / 签名不动）用户自己答对后要求代写；实测发现 jieba 输出含空格 token（需过滤）、"手搓" OOV 兜底单字切。坑：jieba 版本 1.0.4 不存在，中央仓库最新 1.0.2，失败缓存要 `-U`。
 3. **持久化思辨**：用户质疑"为什么要做持久化，几百 M 文件怎么存"——命中需求软肋。结论：源文件可重放 + 重建秒级 → 不做；语料不可重放 + 大规模 → 直接 ES/Lucene，不自研。待办移除。
+
+## 本次会话历程（第五周·编译与日志收尾，2026-08-21）
+
+1. **mvn compile 报错两层原因**：环境层 `JAVA_HOME` 指向 jdk-17（Maven 认 `JAVA_HOME` 不认 PATH，项目要求 21）；代码层 `SessionService` 用了 Jackson 2 包名（Boot 4 类路径是 Jackson 3 `tools.jackson.*`），且 `AssistantMessage(String, List)` 构造器在 Spring AI 2.0 不存在（四参是 protected，只能走 builder）。
+2. **序列化选型**：用户拍板用 fastjson2（pom 本就有依赖）替代 Jackson 做 Redis 会话序列化。record 类型（`ToolCall`/`ToolResponse`）序列化回环已写单测验证通过（验证后按用户要求删除该测试）。
+3. **日志体系**：Spring Boot starter 自带 Logback，无需加依赖；引入 Lombok 必须配 `annotationProcessorPaths`（JDK 21+ javac 不再隐式扫描 classpath 上的注解处理器），否则 `log` 找不到符号。6 个类 `@Slf4j` 替换 `System.out.println`/`printStackTrace`；新增 `logback-spring.xml`，控制台显式 UTF-8。
+4. README/PROGRESS 同步更新，README 去 AI 味改写（去宣言式 blockquote、加粗轰炸、TL;DR 式排比）。
 
 ## 本次会话进展（续接，第四周末段）
 
@@ -69,10 +77,16 @@
 ```
 src/main/java/com/ai/demo/
 ├── DemoApplication.java
-├── ChatController.java          # /chat 端点 → ReActAgent
+├── ChatController.java          # /chat 端点 → ReActAgent（旧入口）
 ├── react/ReActAgent.java        # 手搓 ReAct 循环（ChatModel 层，~100行）
 ├── react/Context.java           # 空壳，未用
-├── tool/TimeTool.java           # getCurrentTime / addTime / sum(故意1/0抛异常)
+├── agent/                       # 第五周升级版 ReAct：ToolRegistry 查表 + StepTrace + token 统计
+│   ├── ReActAgent.java / ToolRegistry.java / AgentTool.java
+├── tool/                        # TimeTool / CalculatorTool / WeatherTool / RetrieveTool
+├── memory/SessionService.java   # Redis 会话短期记忆（fastjson2 序列化，TTL 24h）
+├── eval/EvalRunner.java         # 评估跑批
+├── controller/                  # ChatController / EvalController（第五周新入口）
+├── dto/                         # AgentResult / StepTrace / SessionMessageDto / ChatRequest 等
 ├── splitter/MarkDownWordSplitter.java  # md 结构切分器（三层策略，含 main 测试入口）
 └── rag/
     ├── RagDemo.java             # RAG 最小闭环：向量索引 + 向量召回
@@ -86,12 +100,15 @@ src/main/java/com/ai/demo/
 - `ReAct03.md`：第三周混合检索实战（BM25 + RRF + 陷阱文档 + 错误清单 + 面试弹药）
 - `ReAct04.md`：第四周 RAG 问答 + 官方两代实现源码对照（PromptTemplate 机制 / 1.x 无长度防护 / 2.0 七步管线 / RRF vs 官方 joiner / 空结果三策略）
 - `ReAct05.md`：第五周检索质量进阶（/hybrid/compare 对比端点 / jieba 分词 / "持久化为什么不该做"的架构判断）
-- `README.md`：面试导向的学习档案（**最后一次 push 时被取消，可能未推送，下次先确认 `git status`**）
+- `README.md`：面试导向的学习档案（2026-08-21 已去 AI 味改写并同步第五周进展；**当前版本未 push，下次先确认 `git status`**）
 
 ## 关键环境备忘（重要！）
 
 - **Maven 本地仓库在 `F:\maven\repository`**（settings.xml 自定义，非默认 ~/.m2）
-- **命令行 mvn 默认 JDK 17，项目要求 21**：必须 `JAVA_HOME='C:\Program Files\Java\jdk-21' mvn ...`
+- **命令行 mvn 默认 JDK 17，项目要求 21**：必须 `JAVA_HOME='C:\Program Files\Java\jdk-21' mvn ...`（Maven 认 `JAVA_HOME` 不认 PATH，PATH 里的 java 21 没用）
+- **Boot 4 默认 Jackson 3**（`tools.jackson.*`），`com.fasterxml.jackson.databind` 不在类路径；业务序列化统一用 fastjson2，别引错包
+- **Lombok 必须显式配 `annotationProcessorPaths`**（JDK 21+ javac 不隐式扫描 classpath 上的注解处理器），已在 pom.xml 配好；IDEA 需装 Lombok 插件 + 开启 annotation processing
+- 日志：Logback 随 spring-boot-starter 自带，配置在 `src/main/resources/logback-spring.xml`（控制台 UTF-8，`com.ai.demo` 包 DEBUG）
 - **中文乱码**：运行加 `-Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8`；IDEA 里配 Run Configuration 的 VM options
 - **源码解压位置**：`target/sai-src/`（2.0.0：client-chat、model 包 PromptTemplate、rag 全包 28 文件）、`target/sai-1x/`（1.1.5 QuestionAnswerAdvisor）、`target/sai-commons/`
 - **RAG 相关类不在主依赖里**：`QuestionAnswerAdvisor` 在独立模块 `spring-ai-advisors-vector-store`；2.0 的 RAG 管线在 `spring-ai-rag` 模块。读源码不用引依赖；要用才加 `org.springframework.ai:spring-ai-rag`（BOM 管版本）
@@ -113,6 +130,7 @@ src/main/java/com/ai/demo/
 10. **query 改写/扩展 vs BM25**：同解"词面鸿沟"，一个在 query 层进攻（LLM），一个在检索器层兜底；增强默认全关，质量 vs 延迟/成本的交换
 11. **分词粒度决定 BM25 上限**：单字切 DF 虚高、IDF 失真；jieba 中文按词、英文完整词。坑：输出含空格 token 要过滤；OOV 词兜底单字切（可配用户词典）；实例加载词典开销大必须单例；线程安全官方未承诺
 12. **持久化计算产物前先问**：源数据能否重放？重建成本多少？可重放 + 廉价 → 不做；不可重放 + 大规模 → 用现成方案（BM25 持久化 = ES/Lucene），不自研
+13. **Spring AI 2.0 `AssistantMessage` 构造器**：公开只有 `(String)`，多参是 protected；带 toolCalls 必须用 `AssistantMessage.builder().content().toolCalls().build()`
 
 ## 切块器设计要点（MarkDownWordSplitter）
 
