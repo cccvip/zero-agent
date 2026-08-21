@@ -89,6 +89,13 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
+
+        <!-- Lombok：@Slf4j 等注解，省掉显式 Logger 样板代码 -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
     </dependencies>
 
     <!-- Spring AI 版本统一管理：BOM 导入，不在 parent 里 -->
@@ -111,6 +118,13 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <parameters>true</parameters>
+                    <!-- JDK 21+ 不再隐式扫描 classpath 上的注解处理器，需显式声明 Lombok -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </path>
+                    </annotationProcessorPaths>
                 </configuration>
             </plugin>
             <plugin>

@@ -4,6 +4,7 @@ import com.ai.demo.splitter.MarkDownWordSplitter;
 import com.alibaba.fastjson2.JSON;
 import com.huaban.analysis.jieba.JiebaSegmenter;
 import com.huaban.analysis.jieba.SegToken;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -18,8 +19,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
-import java.io.PrintStream;
-import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -33,6 +32,7 @@ import java.util.*;
  * 3. rrfFuse(List<Document> vectorResults, List<Document> bm25Results, int k) —— 倒数排序融合。
  * 4. 加一份"陷阱文档"，测试向量检索的盲区。
  */
+@Slf4j
 @RestController
 public class HybridRagDemo {
 
@@ -382,13 +382,12 @@ public class HybridRagDemo {
     }
 
     public static void main(String[] args) {
-        System.setOut(new PrintStream(System.out, true, Charset.defaultCharset()));
         HybridRagDemo hybridRagDemo = new HybridRagDemo(null, null);
-        System.out.println(JSON.toJSONString(hybridRagDemo.tokenize("手搓 ReAct 循环 maxStep 123")));
+        log.info("{}", JSON.toJSONString(hybridRagDemo.tokenize("手搓 ReAct 循环 maxStep 123")));
 
         JiebaSegmenter segmenter = new JiebaSegmenter();
         List<SegToken> segTokens = segmenter.process("手搓 ReAct 循环 maxStep 123", JiebaSegmenter.SegMode.INDEX );
-        System.out.println(JSON.toJSONString(segTokens));
+        log.info("{}", JSON.toJSONString(segTokens));
     }
 
 }

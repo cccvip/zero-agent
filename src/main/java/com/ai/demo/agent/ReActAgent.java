@@ -2,6 +2,7 @@ package com.ai.demo.agent;
 
 import com.ai.demo.dto.AgentResult;
 import com.ai.demo.dto.StepTrace;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.metadata.Usage;
@@ -34,6 +35,7 @@ import java.util.List;
  *   - catch 到工具异常必须回喂给模型，不能只 printStackTrace（否则下一轮协议校验直接 400）
  *   - maxStep 是最后一道防线，不是唯一防线
  */
+@Slf4j
 @Component
 public class ReActAgent {
 
@@ -131,10 +133,9 @@ public class ReActAgent {
                         list.add(toolResponse);
                     }catch (Exception e){
                         long toolEnd = System.currentTimeMillis();
-                        System.out.println("执行工具: " + toolCall.name() + " 参数: " + toolCall.arguments());
+                        log.error("执行工具: {} 参数: {} 回喂错误: {}", toolCall.name(), toolCall.arguments(), e.getMessage(), e);
                         list.add(new ToolResponseMessage.ToolResponse(
                                 toolCall.id(), toolCall.name(), "工具执行失败: " + e.getMessage()));
-                        System.out.println("回喂错误: " + e.getMessage());
                         trace.add(new StepTrace("tool_call", toolCall.name(), toolCall.arguments(), "工具执行失败: " + e.getMessage(), toolEnd - toolStart));
                     }
                 }

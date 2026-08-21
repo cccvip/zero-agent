@@ -1,14 +1,11 @@
 package com.ai.demo.splitter;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.transformer.splitter.TextSplitter;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 
-import java.io.FileDescriptor;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -21,6 +18,7 @@ import java.util.List;
  * 策略：按标题层级切块（第一层）→ 超限块按空行分段（第二层）→ 仍超限委托 TokenTextSplitter（第三层）。
  * 每个块的开头带"归属路径"前缀（contextual chunking）。
  */
+@Slf4j
 public class MarkDownWordSplitter extends TextSplitter {
 
     /** 切块层级：遇到层级 <= cutLevel 的标题时结算旧块、开新块 */
@@ -163,18 +161,15 @@ public class MarkDownWordSplitter extends TextSplitter {
 
     public static void main(String[] args) {
         try {
-            System.setOut(new PrintStream(
-                    new FileOutputStream(FileDescriptor.out), true, StandardCharsets.UTF_8));
-            System.setErr(new PrintStream(
-                    new FileOutputStream(FileDescriptor.err), true, StandardCharsets.UTF_8));
             String md = Files.readString(Path.of("ReAct01.md"));
             MarkDownWordSplitter splitter = new MarkDownWordSplitter();
             List<String> chunks = splitter.splitText(md);
             for (int i = 0; i < chunks.size(); i++) {
-                System.out.printf("=== 块 %d ===%n%.80s%n%n", i, chunks.get(i));
+                String chunk = chunks.get(i);
+                log.info("=== 块 {} ===\n{}\n", i, chunk.length() > 80 ? chunk.substring(0, 80) : chunk);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error("Markdown 切分失败", e);
         }
     }
 

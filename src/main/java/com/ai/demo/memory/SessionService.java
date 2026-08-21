@@ -1,8 +1,8 @@
 package com.ai.demo.memory;
 
 import com.ai.demo.dto.SessionMessageDto;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.alibaba.fastjson2.JSON;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -22,6 +22,7 @@ import java.util.List;
  * key：session:{sessionId} → JSON 消息列表；TTL 24h。
  * 无跨会话共享状态，并发安全边界 = 按 sessionId 读写。
  */
+@Slf4j
 @Service
 public class SessionService {
 
@@ -29,7 +30,6 @@ public class SessionService {
     private static final Duration TTL = Duration.ofHours(24);
 
     private final StringRedisTemplate redisTemplate;
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public SessionService(StringRedisTemplate redisTemplate) {
         this.redisTemplate = redisTemplate;
@@ -48,7 +48,7 @@ public class SessionService {
             return new ArrayList<>();
         }
         try {
-            List<SessionMessageDto> dtos = objectMapper.readValue(json, new TypeReference<>() {});
+            List<SessionMessageDto> dtos = JSON.parseArray(json, SessionMessageDto.class);
             List<Message> messages = new ArrayList<>(dtos.size());
             for (SessionMessageDto dto : dtos) {
                 Message message = rebuildMessage(dto);
@@ -79,11 +79,11 @@ public class SessionService {
                     dtos.add(dto);
                 }
             }
-            String json = objectMapper.writeValueAsString(dtos);
+            String json = JSON.toJSONString(dtos);
             redisTemplate.opsForValue().set(KEY_PREFIX + sessionId, json, TTL);
         } catch (Exception e) {
-            // 序列化失败不影响主对话，仅打印日志；可升级为 slf4j
-            e.printStackTrace();
+            // 序列化失败不影响主对话，仅记录日志
+            log.warn("会话历史序列化失败, sessionId={}", sessionId, e);
         }
     }
 
@@ -141,7 +141,7 @@ public class SessionService {
                         }
                     }
                 }
-                yield new AssistantMessage(dto.getText(), toolCalls);
+                yield AssistantMessage.builder().content(dto.getText()).toolCalls(toolCalls).build();
             }
             case "TOOL" -> {
                 List<ToolResponseMessage.ToolResponse> responses = new ArrayList<>();
@@ -162,7 +162,7 @@ public class SessionService {
 
     private String writeJson(Object value) {
         try {
-            return objectMapper.writeValueAsString(value);
+            return JSON.toJSONString(value);
         } catch (Exception e) {
             throw new IllegalStateException("序列化失败: " + value.getClass().getSimpleName(), e);
         }
@@ -170,10 +170,10 @@ public class SessionService {
 
     private <T> T readJson(String json, Class<T> clazz) {
         try {
-            return objectMapper.readValue(json, clazz);
+            return JSON.parseObject(json, clazz);
         } catch (Exception e) {
             // 单个对象损坏时跳过，不丢弃整段历史
-            e.printStackTrace();
+            log.warn("单条消息反序列化失败, json={}", json, e);
             return null;
         }
     }

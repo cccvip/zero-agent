@@ -1,6 +1,7 @@
 package com.ai.demo.react;
 
 import com.ai.demo.tool.TimeTool;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
@@ -19,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+@Slf4j
 @Component(value = "DeepSeekAgent")
 public class ReActAgent {
 
@@ -88,10 +90,9 @@ public class ReActAgent {
                         );
                         list.add(toolResponse);
                     }catch (Exception e){
-                        System.out.println("执行工具: " + toolCall.name() + " 参数: " + toolCall.arguments());
+                        log.error("执行工具: {} 参数: {} 回喂错误: {}", toolCall.name(), toolCall.arguments(), e.getMessage(), e);
                         list.add(new ToolResponseMessage.ToolResponse(
                                 toolCall.id(), toolCall.name(), "工具执行失败: " + e.getMessage()));
-                        System.out.println("回喂错误: " + e.getMessage());
                     }
                 }
                 ToolResponseMessage toolResponseMessage = ToolResponseMessage.builder().responses(list).build();
@@ -101,7 +102,7 @@ public class ReActAgent {
                 break;
             }
         }
-        System.out.println(step);
+        log.info("ReAct 结束，步数: {}", step);
 
 
 

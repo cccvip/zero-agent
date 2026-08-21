@@ -1,6 +1,7 @@
 package com.ai.demo.tool;
 
 import com.ai.demo.agent.AgentTool;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.support.ToolCallbacks;
@@ -11,6 +12,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.List;
 
+@Slf4j
 @Component
 public class TimeTool implements AgentTool {
 
@@ -28,13 +30,13 @@ public class TimeTool implements AgentTool {
 
     @Tool(description = "获取当前系统的日期与时间，格式：yyyy-MM-dd HH:mm:ss")
     public String getCurrentTime() {
-        System.out.println("getCurrentTime start");
+        log.info("getCurrentTime start");
         return LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
     }
 
     @Tool(description = "时间计算,当前时间增加几小时，返回格式：yyyy-MM-dd HH:mm:ss")
     public String addTime(long hour) {
-        System.out.println("addTime start");
+        log.info("addTime start, hour={}", hour);
         return LocalDateTime.now().plusHours(hour).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
     }
 
